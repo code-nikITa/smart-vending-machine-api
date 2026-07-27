@@ -1,4 +1,4 @@
-# Умный торговый автомат — REST API
+# Умный торговый автомат REST API
 
 REST API для управления одним умным торговым автоматом на Express.js. Автомат хранит товары в слотах, принимает монеты, продаёт товары и требует обслуживания, чтобы не перегреться. Хранение данных — in-memory, без базы данных.
 
@@ -11,7 +11,7 @@ REST API для управления одним умным торговым ав
 ## Установка и запуск
 
 ```bash
-git clone <ссылка-на-репозиторий>
+git clone https://github.com/code-nikITa/smart-vending-machine-api
 cd smart-vending-machine-api
 npm install
 npm start
