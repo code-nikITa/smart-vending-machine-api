@@ -1,5 +1,7 @@
 # Умный торговый автомат REST API
 
+![Tests](https://github.com/code-nikITa/smart-vending-machine-api/actions/workflows/test.yml/badge.svg)
+
 REST API для управления одним умным торговым автоматом на Express.js. Автомат хранит товары в слотах, принимает монеты, продаёт товары и требует обслуживания, чтобы не перегреться. Хранение данных — in-memory, без базы данных.
 
 ## Стек
