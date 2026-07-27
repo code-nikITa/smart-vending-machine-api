@@ -11,7 +11,7 @@ REST API для управления одним умным торговым ав
 ## Установка и запуск
 
 ```bash
-git clone <ссылка-на-репозиторий>
+git clone <https://github.com/code-nikITa/smart-vending-machine-api>
 cd smart-vending-machine-api
 npm install
 npm start
