@@ -34,9 +34,21 @@ class VendingMachine {
   }
 
   /**
+   * Сбрасывает состояние автомата к начальному. Используется в интеграционных
+   * тестах, чтобы каждый тест стартовал с чистого листа несмотря на то, что
+   * машина — синглтон и её состояние иначе "утекало" бы между тестами.
+   */
+  reset() {
+    this.stopTicking();
+    this.temperature = INITIAL_TEMPERATURE;
+    this.credit = 0;
+    this.revenue = 0;
+    this.slots = [];
+  }
+
+  /**
    * Статус не хранится отдельным полем — он всегда вычисляется по
-   * текущей температуре. Это исключает рассинхронизацию состояния:
-   * достаточно доверять одному числу (temperature).
+   * текущей температуре. Это исключает рассинхронизацию состояния.
    */
   getStatus() {
     if (this.temperature > CRITICAL_TEMPERATURE) return STATUS.BROKEN;
@@ -54,24 +66,19 @@ class VendingMachine {
       credit: this.credit,
       revenue: this.revenue,
       status: this.getStatus(),
-      slots: this.slots.map((slot) => ({ ...slot })),
+      slots: this.slots.map((s) => ({ ...s })),
     };
   }
 
   findSlot(id) {
-    return this.slots.find((slot) => slot.id === id);
+    return this.slots.find((s) => s.id === id);
   }
 
   restock({ id, product, price, stock }) {
-    const existingIndex = this.slots.findIndex((slot) => slot.id === id);
+    const idx = this.slots.findIndex((s) => s.id === id);
     const newSlot = { id, product, price, stock, freshness: 100 };
-
-    if (existingIndex >= 0) {
-      this.slots[existingIndex] = newSlot;
-    } else {
-      this.slots.push(newSlot);
-    }
-
+    if (idx >= 0) this.slots[idx] = newSlot;
+    else this.slots.push(newSlot);
     return { ...newSlot };
   }
 
@@ -140,7 +147,6 @@ class VendingMachine {
   startTicking() {
     if (this._tickTimer) return;
     this._tickTimer = setInterval(() => this.tick(), TICK_INTERVAL_MS);
-    // Не даём таймеру держать процесс живым при завершении работы/тестах.
     if (typeof this._tickTimer.unref === 'function') {
       this._tickTimer.unref();
     }
