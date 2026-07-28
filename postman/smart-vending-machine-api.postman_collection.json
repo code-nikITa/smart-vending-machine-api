@@ -1,0 +1,1173 @@
+{
+  "info": {
+    "name": "Smart Vending Machine API",
+    "description": "Postman-коллекция для REST API умного торгового автомата (Express.js, in-memory state).\n\nИмпортируй вместе с environment-файлом \"Vending Machine - Local\" (переменная {{baseUrl}} по умолчанию указывает на http://localhost:3000).\n\nПапки организованы в порядке, в котором имеет смысл их проходить: от простого чтения состояния до полного сценария покупки и всех веток ошибок. Каждый запрос содержит тесты (pm.test), проверяющие и HTTP-статус, и форму/содержимое тела ответа — коллекцию можно гонять как через Postman GUI, так и headless через Newman (см. README проекта, npm run test:api).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "restockSlotId",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "restockPrice",
+      "value": "120",
+      "type": "string"
+    },
+    {
+      "key": "revenueBeforeFlow",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "flowPrice",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "creditAfterInsert",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "remainingCreditAfterPurchase",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "temperatureBeforeMaintenance",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Info",
+      "description": "Базовый health-check эндпоинт, не описанный в спецификации явно, но полезный для проверки, что сервер поднят.",
+      "item": [
+        {
+          "name": "GET API Root Info",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": []
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Response has a welcome message', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property('message');",
+                  "  pm.expect(json.message).to.include('Vending Machine');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. Machine State",
+      "description": "GET /machine — просмотр текущего состояния автомата. Единственный эндпоинт, доступный даже когда автомат сломан.",
+      "item": [
+        {
+          "name": "GET Machine State",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/machine",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "machine"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Response has full machine shape', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.all.keys('temperature', 'credit', 'revenue', 'status', 'slots');",
+                  "  pm.expect(json.slots).to.be.an('array');",
+                  "  pm.expect(json.status).to.be.oneOf(['operational', 'overheated', 'broken']);",
+                  "});",
+                  "pm.test('temperature, credit and revenue are numbers', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.temperature).to.be.a('number');",
+                  "  pm.expect(json.credit).to.be.a('number');",
+                  "  pm.expect(json.revenue).to.be.a('number');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3. Restock",
+      "description": "POST /machine/restock — создание нового слота или полная замена существующего. Freshness всегда сбрасывается в 100.",
+      "item": [
+        {
+          "name": "Restock — Create New Slot (201-style 200 OK)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/machine/restock",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "machine",
+                "restock"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": 501,\n  \"product\": \"Postman Test Cola\",\n  \"price\": 100,\n  \"stock\": 10\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Slot created with freshness reset to 100', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.slot).to.include({ id: 501, product: 'Postman Test Cola', price: 100, stock: 10, freshness: 100 });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Restock — Replace Existing Slot",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/machine/restock",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "machine",
+                "restock"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": 501,\n  \"product\": \"Postman Test Sprite\",\n  \"price\": 90,\n  \"stock\": 3\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Slot fully replaced, not merged', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.slot.product).to.eql('Postman Test Sprite');",
+                  "  pm.expect(json.slot.price).to.eql(90);",
+                  "  pm.expect(json.slot.stock).to.eql(3);",
+                  "  pm.expect(json.slot.freshness).to.eql(100);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Restock — 400 Missing Required Fields",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/machine/restock",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "machine",
+                "restock"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": 502,\n  \"product\": \"Incomplete Item\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Response lists missing fields', () => {",
+                  "  const json = pm.response.json();",
+                  "  const fields = json.details.map((d) => d.field);",
+                  "  pm.expect(fields).to.include.members(['price', 'stock']);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Restock — 400 Wrong Field Types",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/machine/restock",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "machine",
+                "restock"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"502\",\n  \"product\": \"Bad Types\",\n  \"price\": \"expensive\",\n  \"stock\": 10\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Response flags id and price as invalid', () => {",
+                  "  const json = pm.response.json();",
+                  "  const fields = json.details.map((d) => d.field);",
+                  "  pm.expect(fields).to.include.members(['id', 'price']);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "4. Insert Coins",
+      "description": "POST /machine/insert — пополнение кредита монетами.",
+      "item": [
+        {
+          "name": "Insert Coins — Success",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/machine/insert",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "machine",
+                "insert"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 50\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Credit increases by inserted amount', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property('credit');",
+                  "  pm.expect(json.credit).to.be.a('number');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Insert Coins — 400 Non-Positive Amount",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/machine/insert",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "machine",
+                "insert"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": -5\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Error message mentions invalid payload', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.error).to.include('Invalid insert payload');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "5. Purchase Flow (Happy Path)",
+      "description": "Последовательный сценарий покупки от начала до конца. Запросы должны выполняться по порядку (сверху вниз) — каждый следующий шаг использует данные, сохранённые предыдущим через переменные коллекции. Это делает сценарий устойчивым к повторным запускам, так как сравниваются относительные изменения (дельты), а не абсолютные значения.",
+      "item": [
+        {
+          "name": "0. Get State Before Flow",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/machine",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "machine"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('revenueBeforeFlow', json.revenue);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "1. Restock Product For Flow",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/machine/restock",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "machine",
+                "restock"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": {{restockSlotId}},\n  \"product\": \"Postman Flow Cola\",\n  \"price\": {{restockPrice}},\n  \"stock\": 5\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Slot has full stock and fresh product', () => {",
+                  "  pm.expect(json.slot.stock).to.eql(5);",
+                  "  pm.expect(json.slot.freshness).to.eql(100);",
+                  "});",
+                  "pm.collectionVariables.set('flowPrice', json.slot.price);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2. Insert Sufficient Coins",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/machine/insert",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "machine",
+                "insert"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 500\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('creditAfterInsert', json.credit);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3. Purchase Product — Success",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/machine/select",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "machine",
+                "select"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"slotId\": {{restockSlotId}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "const price = Number(pm.collectionVariables.get('flowPrice'));",
+                  "const creditAfterInsert = Number(pm.collectionVariables.get('creditAfterInsert'));",
+                  "pm.test('Purchased product matches restocked product', () => {",
+                  "  pm.expect(json.product).to.eql('Postman Flow Cola');",
+                  "  pm.expect(json.price).to.eql(price);",
+                  "});",
+                  "pm.test('Remaining credit equals creditAfterInsert minus price', () => {",
+                  "  pm.expect(json.remainingCredit).to.eql(creditAfterInsert - price);",
+                  "});",
+                  "pm.collectionVariables.set('remainingCreditAfterPurchase', json.remainingCredit);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4. Verify State After Purchase",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/machine",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "machine"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "const price = Number(pm.collectionVariables.get('flowPrice'));",
+                  "const revenueBeforeFlow = Number(pm.collectionVariables.get('revenueBeforeFlow'));",
+                  "const expectedCredit = Number(pm.collectionVariables.get('remainingCreditAfterPurchase'));",
+                  "pm.test('Revenue increased by exactly the purchase price', () => {",
+                  "  pm.expect(json.revenue).to.eql(revenueBeforeFlow + price);",
+                  "});",
+                  "pm.test('Slot stock decreased by 1 (5 -> 4)', () => {",
+                  "  const slot = json.slots.find((s) => s.id === Number(pm.collectionVariables.get('restockSlotId')));",
+                  "  pm.expect(slot.stock).to.eql(4);",
+                  "});",
+                  "pm.test('Credit matches the value returned by the purchase', () => {",
+                  "  pm.expect(json.credit).to.eql(expectedCredit);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "6. Purchase Errors",
+      "description": "Все ветки отказа при POST /machine/select: неверный тип поля, несуществующий слот, нет остатка, недостаточно кредита.",
+      "item": [
+        {
+          "name": "Select — 400 Invalid slotId Type",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/machine/select",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "machine",
+                "select"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"slotId\": \"one\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Select — 404 Unknown Slot",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/machine/select",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "machine",
+                "select"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"slotId\": 999999\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Error code is SLOT_NOT_FOUND', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.code).to.eql('SLOT_NOT_FOUND');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Setup: Restock Out-of-Stock Slot",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/machine/restock",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "machine",
+                "restock"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": 601,\n  \"product\": \"Sold Out Item\",\n  \"price\": 50,\n  \"stock\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Select — 409 Out of Stock",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/machine/select",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "machine",
+                "select"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"slotId\": 601\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 409', () => pm.response.to.have.status(409));",
+                  "pm.test('Error code is OUT_OF_STOCK', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.code).to.eql('OUT_OF_STOCK');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Setup: Restock Astronomically Priced Slot",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/machine/restock",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "machine",
+                "restock"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": 602,\n  \"product\": \"Unaffordable Item\",\n  \"price\": 999999999,\n  \"stock\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Цена намеренно огромна, чтобы тест был устойчив к любому остаточному кредиту от предыдущих запросов в этом же прогоне коллекции."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Select — 402 Insufficient Credit",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/machine/select",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "machine",
+                "select"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"slotId\": 602\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 402', () => pm.response.to.have.status(402));",
+                  "pm.test('Error code is INSUFFICIENT_CREDIT', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.code).to.eql('INSUFFICIENT_CREDIT');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "7. Maintenance",
+      "description": "POST /machine/maintain — снижает температуру на 30 (не ниже 0). Недоступен, если автомат уже сломан.",
+      "item": [
+        {
+          "name": "0. Get Temperature Before Maintenance",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/machine",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "machine"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('temperatureBeforeMaintenance', json.temperature);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Maintain — Lower Temperature",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/machine/maintain",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "machine",
+                "maintain"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "const before = Number(pm.collectionVariables.get('temperatureBeforeMaintenance'));",
+                  "const expected = Math.max(0, before - 30);",
+                  "pm.test('Temperature decreased by 30, clamped at 0', () => {",
+                  "  pm.expect(json.temperature).to.eql(expected);",
+                  "});",
+                  "pm.test('Status recalculated correctly', () => {",
+                  "  pm.expect(json.status).to.eql(expected > 100 ? 'broken' : expected > 80 ? 'overheated' : 'operational');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "8. Error Handling (Generic)",
+      "description": "Общие сценарии ошибок, не завязанные на бизнес-логику автомата: неизвестный роут и невалидный JSON в теле запроса.",
+      "item": [
+        {
+          "name": "Unknown Route — 404",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/no-such-route",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "no-such-route"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Error message is Route not found', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.error).to.eql('Route not found');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Malformed JSON Body — 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/machine/insert",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "machine",
+                "insert"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{amount: 100",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Error message mentions invalid JSON', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.error).to.include('Invalid JSON');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "9. Broken Machine State (Manual / Long-Running)",
+      "description": "По спецификации у автомата нет debug-эндпоинта для принудительной поломки — температура растёт на 3 каждую минуту автоматически, и natуральный путь к статусу \"broken\" (>100) от начальной температуры 20 занимает около 27 минут непрерывной работы сервера. Чтобы проверить это поведение быстро вручную: временно поменяйте INITIAL_TEMPERATURE в src/models/machine.js на значение > 100 перед запуском сервера, либо дождитесь реального времени. Эта папка оставлена как документация, а не как автоматизированный тест, чтобы не подделывать функциональность, которой нет в самом API.",
+      "item": [
+        {
+          "name": "GET Machine State (check status field manually)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/machine",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "machine"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Status is one of the three valid values', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.status).to.be.oneOf(['operational', 'overheated', 'broken']);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

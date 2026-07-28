@@ -6,7 +6,9 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "test": "node --test"
+    "test": "node --test",
+    "test:api": "newman run postman/smart-vending-machine-api.postman_collection.json -e postman/smart-vending-machine-api.postman_environment.json",
+    "test:api:ci": "start-server-and-test start http://localhost:3000/machine test:api"
   },
   "license": "MIT",
   "engines": {
@@ -16,6 +18,8 @@
     "express": "^4.19.2"
   },
   "devDependencies": {
+    "newman": "^6.2.2",
+    "start-server-and-test": "^3.0.11",
     "supertest": "^7.2.2"
   }
 }
